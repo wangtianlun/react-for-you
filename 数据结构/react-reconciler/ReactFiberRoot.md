@@ -5,21 +5,23 @@
     // 只有在持久化更新中会用到
     pendingChildren: any,
     // The currently active root fiber. This is the mutable root of the tree.
+    // 当前激活的Root Fiber
     current: Fiber,
 
-    // The following priority levels are used to distinguish between 1)
-    // uncommitted work, 2) uncommitted work that is suspended, and 3) uncommitted
-    // work that may be unsuspended. We choose not to track each individual
-    // pending level, trading granularity for performance.
-    //
-    // The earliest and latest priority levels that are suspended from committing.
+    // 优先级区分
+    // 1) 未提交的任务
+    // 2) 未提交被挂起的任务
+    // 3) 未提交且可能被挂起的任务
+    // 为了兼顾性能，我们不会去追踪每一个单独的阻塞等级
+    // 最早和最新的在提交时被挂起的优先级
     earliestSuspendedTime: ExpirationTime,
     latestSuspendedTime: ExpirationTime,
-    // The earliest and latest priority levels that are not known to be suspended.
+
+    // 最早和最新不确定是否被挂起的优先级
     earliestPendingTime: ExpirationTime,
     latestPendingTime: ExpirationTime,
-    // The latest priority level that was pinged by a resolved promise and can
-    // be retried.
+
+    // 最新的通过一个promise被resolve并且能够重新尝试的优先级
     latestPingedTime: ExpirationTime,
 
     pingCache:
@@ -27,9 +29,7 @@
       | Map<Thenable, Set<ExpirationTime>>
       | null,
 
-    // If an error is thrown, and there are no more updates in the queue, we try
-    // rendering from the root one more time, synchronously, before handling
-    // the error.
+    // 如果有错误被抛出，而且队列里没有更多的更新时，我们会在处理错误前尝试重新渲染整个root
     didError: boolean,
 
     pendingCommitExpirationTime: ExpirationTime,
