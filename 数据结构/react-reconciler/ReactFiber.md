@@ -1,6 +1,5 @@
 ```javascript
-  // A Fiber is work on a Component that needs to be done or was done. There can
-// be more than one per component.
+  // Fiber作用于需要完成或已完成的组件，一个组件可能会有多个fiber对象
 type Fiber = {|
   // These first fields are conceptually members of an Instance. This used to
   // be split into a separate type and intersected with the other Fiber fields,
