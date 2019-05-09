@@ -41,7 +41,7 @@
     // Top context object, used by renderSubtreeIntoContainer
     context: Object | null,
     pendingContext: Object | null,
-    // Determines if we should attempt to hydrate on the initial mount
+    // 用来确定第一次挂载的时候是否需要融合
     +hydrate: boolean,
     // Remaining expiration time on this root.
     // TODO: Lift this into the renderer
