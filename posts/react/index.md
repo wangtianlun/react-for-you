@@ -358,5 +358,205 @@ export function createHostRootFiber(isConcurrent: boolean): Fiber {
   };
 ```
 
+首先来看看参数，tag也就是上面我们传入的HostRoot常量，值为3，pendingProps和key传入的都为null，最后mode传入的值为NoContext，也就是0b000。
+函数体内又调用了FiberNode的构造方法创建了一个Fiber实例。接下来再进入到FiberNode构造函数中一探究竟。
 
+```javascript
+function FiberNode(
+  tag: WorkTag,
+  pendingProps: mixed,
+  key: null | string,
+  mode: TypeOfMode,
+) {
+  // Instance
+  this.tag = tag;
+  this.key = key;
+  this.elementType = null;
+  this.type = null;
+  this.stateNode = null;
+
+  // Fiber
+  this.return = null;
+  this.child = null;
+  this.sibling = null;
+  this.index = 0;
+
+  this.ref = null;
+
+  this.pendingProps = pendingProps;
+  this.memoizedProps = null;
+  this.updateQueue = null;
+  this.memoizedState = null;
+  this.firstContextDependency = null;
+
+  this.mode = mode;
+
+  // Effects
+  this.effectTag = NoEffect;
+  this.nextEffect = null;
+
+  this.firstEffect = null;
+  this.lastEffect = null;
+
+  this.expirationTime = NoWork;
+  this.childExpirationTime = NoWork;
+
+  this.alternate = null;
+
+  if (enableProfilerTimer) {
+    this.actualDuration = 0;
+    this.actualStartTime = -1;
+    this.selfBaseDuration = 0;
+    this.treeBaseDuration = 0;
+  }
+}
+```
+
+上面的代码根据我们的调用栈翻译过来也就是这样
+
+```javascript
+  // Instance
+  this.tag = 3;
+  this.key = null;
+  this.elementType = null;
+  this.type = null;
+  this.stateNode = null;
+
+  // Fiber
+  this.return = null;
+  this.child = null;
+  this.sibling = null;
+  this.index = 0;
+
+  this.ref = null;
+
+  this.pendingProps = null;  // 这里的pendingProps我们传入的为null
+  this.memoizedProps = null;
+  this.updateQueue = null;
+  this.memoizedState = null;
+  this.firstContextDependency = null;
+
+  this.mode = 0; // mode传入的为0，因为二进制0b000转换为十进制就是为0
+
+  // Effects
+  this.effectTag = 0; // NoEffect来自shared/ReactSideEffectTags.js文件，这个也是一个二进制常量0b00000000000， 转换为十进制也是为0
+  this.nextEffect = null;
+
+  this.firstEffect = null;
+  this.lastEffect = null;
+
+  this.expirationTime = 0; // NoWork常量定义在react-reconciler/ReactFiberExpirationTime.js文件中，值为0
+  this.childExpirationTime = 0;
+
+  this.alternate = null;
+
+  // 以下代码会在性能监测时会用到，enableProfilerTimer定义在shared/ReactFeatureFlags文件中，它的值等于__PROFILE__，这个__PROFILE__应该是react通过构建工具去注入到源码中的变量
+  // 在我们第一次执行过程中，该值为true，这个先暂且放到这里。在最新版本的react中，这里还有很长的一段注释，如下
+  // Note: The following is done to avoid a v8 performance cliff.
+  //
+  // Initializing the fields below to smis and later updating them with
+  // double values will cause Fibers to end up having separate shapes.
+  // This behavior/bug has something to do with Object.preventExtension().
+  // Fortunately this only impacts DEV builds.
+  // Unfortunately it makes React unusably slow for some applications.
+  // To work around this, initialize the fields below with doubles.
+  //
+  // Learn more about this here:
+  // https://github.com/facebook/react/issues/14365
+  // https://bugs.chromium.org/p/v8/issues/detail?id=8538
+  // 
+  // 注意：为了避免出现v8的性能瓶颈，请执行以下操作
+  // 
+  if (enableProfilerTimer) {
+    this.actualDuration = Number.NaN;
+    this.actualStartTime = Number.NaN;
+    this.selfBaseDuration = Number.NaN;
+    this.treeBaseDuration = Number.NaN;
+
+    // It's okay to replace the initial doubles with smis after initialization.
+    // This won't trigger the performance cliff mentioned above,
+    // and it simplifies other profiler code (including DevTools).
+    this.actualDuration = 0;
+    this.actualStartTime = -1;
+    this.selfBaseDuration = 0;
+    this.treeBaseDuration = 0;
+  }
+```
+
+执行过后，我们就得到了一个FiberNode对象，沿着调用栈一直往上回溯。回溯到createFiberRoot方法中，因为上述过程也仅仅是通过该函数中的第一行，调用createHostRootFiber方法产生的。这么“宝贵”的FiberNode对象最终赋予了uninitializedFiber变量。再往下执行，会去判断enableSchedulerTracing，enableSchedulerTracing定义在shared/ReactFeatureFlags文件中，它的值也为__PROFILE__，所以也是和性能监测有关。这里值也为true。接着走到if代码块里来定义我们的root这个变量。这个root变量也就是createFiberRoot方法最后要返回给上一步的FiberRoot对象。定义如下
+
+```javascript
+  root = {
+    current: uninitializedFiber, // 这个current的值就是我们上面得到的FiberNode对象
+    containerInfo: containerInfo, // id为root的DOM元素
+    pendingChildren: null,
+
+    earliestPendingTime: NoWork, // NoWork值全为0
+    latestPendingTime: NoWork,
+    earliestSuspendedTime: NoWork,
+    latestSuspendedTime: NoWork,
+    latestPingedTime: NoWork,
+
+    pingCache: null,
+
+    didError: false,
+
+    pendingCommitExpirationTime: NoWork,
+    finishedWork: null,
+    timeoutHandle: noTimeout, // noTimeout定义在react-reconciler/ReactFiberHostConfig.js文件中，值为-1
+    context: null,
+    pendingContext: null,
+    hydrate: hydrate, // 这里的hydrate为false，因为是客户端渲染
+    nextExpirationTimeToWorkOn: NoWork,
+    expirationTime: NoWork,
+    firstBatch: null,
+    nextScheduledRoot: null,
+
+    interactionThreadID: unstable_getThreadID(), // 该函数同样也是与性能测试相关的，它会返回一个数字
+    memoizedInteractions: new Set(),
+    pendingInteractionMap: new Map()
+  };
+```
+执行过后就完成了FiberRoot对象的定义，接下来会把FiberRoot对象赋值给uninitializedFiber对象的stateNode属性上。最后将FiberRoot对象return。
+继续往上回溯，回溯到ReactRoot函数里，将返回的FiberRoot对象赋予this的_internalRoot属性上，这里的this指向ReactRoot函数的实例。
+
+```javascript
+  this._internalRoot = root;
+```
+
+继续往上回溯，直到legacyCreateRootFromDOMContainer函数中，在函数最后返回的就是ReactRoot的实例。
+
+继续往上回溯，legacyRenderSubtreeIntoContainer方法中，还记得这里吗？也就是标记为初次挂载的这部分逻辑里，在这里我们定义了root变量，以及container._reactRootContainer，执行了这一句
+root = container._reactRootContainer = legacyCreateRootFromDOMContainer(container, forceHydrate);
+接下来执行的是这段代码
+
+```javascript
+  if (typeof callback === 'function') {
+    const originalCallback = callback;
+    callback = function() {
+      const instance = getPublicRootInstance(root._internalRoot);
+      originalCallback.call(instance);
+    };
+  }
+```
+
+首次调用时，传入的callback为undefined，所以并不会执行上述代码块里的代码
+接下来是这一段代码
+
+```javascript
+  // Initial mount should not be batched.
+  unbatchedUpdates(() => {
+    if (parentComponent != null) {
+      root.legacy_renderSubtreeIntoContainer(
+        parentComponent,
+        children,
+        callback,
+      );
+    } else {
+      root.render(children, callback);
+    }
+  });
+```
+
+第一行注释说明初始化挂载不应该被批量更新处理，从定义的函数名unbatchedUpdates就能看得出。看看这个函数的定义
 
