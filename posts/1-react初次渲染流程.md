@@ -29,7 +29,7 @@
   </html>
 ```
 
-首先会去调用createElementWithValidation方法，验证传入的组件是否是合法的类型，如果合法，则会去调用createElement方法。通过这句代码进行调用
+首先会去调用React.createElement去创建组件元素，紧接着进入到createElementWithValidation方法，验证传入的组件是否是合法的类型，如果合法，则会去调用createElement方法。通过这句代码进行调用
 
 ```javascript
   var element = createElement.apply(this, arguments);
