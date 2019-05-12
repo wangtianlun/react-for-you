@@ -560,3 +560,108 @@ root = container._reactRootContainer = legacyCreateRootFromDOMContainer(containe
 
 第一行注释说明初始化挂载不应该被批量更新处理，从定义的函数名unbatchedUpdates就能看得出。看看这个函数的定义
 
+```javascript
+  // TODO: Batching should be implemented at the renderer level, not inside
+  // the reconciler.
+  // 批量操作应该在渲染层实现，而不是在协调器里
+  function unbatchedUpdates<A, R>(fn: (a: A) => R, a: A): R {
+    if (isBatchingUpdates && !isUnbatchingUpdates) {
+      isUnbatchingUpdates = true;
+      try {
+        return fn(a);
+      } finally {
+        isUnbatchingUpdates = false;
+      }
+    }
+    return fn(a);
+  }
+```
+isBatchingUpdates和isUnbatchingUpdates是两个boolean值，初次渲染时两个值都为false，所以这里面的if代码块就不会执行，而是直接返回fn(a)的返回值。在我们传入的fn这个函数里，首先对parentComponent进行非空判断，第一次渲染时parentComponent为null，所以这里直接进入到了else部分，也就是调用了ReactRoot对象上的render方法。render方法定义在ReactRoot的原型上，如下
+
+```javascript
+  ReactRoot.prototype.render = function(
+    children: ReactNodeList,
+    callback: ?() => mixed,
+  ): Work {
+    const root = this._internalRoot;
+    const work = new ReactWork();
+    callback = callback === undefined ? null : callback;
+    if (callback !== null) {
+      work.then(callback);
+    }
+    updateContainer(children, root, null, work._onCommit);
+    return work;
+  };
+```
+
+这里children就是我们定义的App组件对象，callback这里为undefined，我们没有指定。首先第一句const root = this._internalRoot; 回顾上面返回FiberRoot的流程，这里的this._internalRoot就是我们之前得到的FiberRoot对象。然后实例化了一个ReactWork对象，来看看ReactWork的定义。
+
+```javascript
+  function ReactWork() {
+    this._callbacks = null;
+    this._didCommit = false;
+    // TODO: Avoid need to bind by replacing callbacks in the update queue with
+    // list of Work objects.
+    this._onCommit = this._onCommit.bind(this);
+  }
+```
+
+实例化之后，就会执行到updateContainer这个函数里，分别传入App组件对象，FiberRoot，null，以及ReactWork实例的bind方法。来看下具体定义。
+
+```javascript
+  function updateContainer(
+    element: ReactNodeList,
+    container: OpaqueRoot,
+    parentComponent: ?React$Component<any, any>,
+    callback: ?Function,
+  ): ExpirationTime {
+    const current = container.current;
+    const currentTime = requestCurrentTime();
+    const expirationTime = computeExpirationForFiber(currentTime, current);
+    return updateContainerAtExpirationTime(
+      element,
+      container,
+      parentComponent,
+      expirationTime,
+      callback,
+    );
+  }
+```
+
+来看函数体，第一句定义了一个常量current，还记得FiberRoot对象的current属性指向的是之前求得的FiberNode对象吗，如果不记得，可以翻看下上面的过程。就是那个叫做**uninitializedFiber**的对象。
+第二行会去调用requestCurrentTime方法获取一个时间，我们来看看这个函数的定义。它定义在react-reconciler/src/ReactFiberScheduler.js
+
+```javascript
+function requestCurrentTime() {
+  if (isRendering) {
+    return currentSchedulerTime;
+  }
+  findHighestPriorityRoot();
+  if (
+    nextFlushedExpirationTime === NoWork ||
+    nextFlushedExpirationTime === Never
+  ) {
+    recomputeCurrentRendererTime();
+    currentSchedulerTime = currentRendererTime;
+    return currentSchedulerTime;
+  }
+
+  return currentSchedulerTime;
+}
+```
+
+根据注释上的说明可知，调度器会去调用requestCurrentTime函数去计算出一个到期时间，进入到函数体。首先判断isRendering，如果为true则表示正在渲染，返回当前调度时间currentSchedulerTime，这个值最开始被初始化为currentRendererTime这个时间，而currentRendererTime这个时间是通过调用msToExpirationTime并传入当前时间算出的，
+
+```javascript
+  // 1 unit of expiration time represents 10ms.
+  function msToExpirationTime(ms: number): ExpirationTime {
+    // Always add an offset so that we don't clash with the magic number for NoWork.
+    return MAGIC_NUMBER_OFFSET - ((ms / UNIT_SIZE) | 0);
+  }
+```
+
+这里的ms我们传入的就是now()，可以理解为Date.now()的值。这里的MAX_SIGNED_31_BIT_INT定义为1073741823，这个值表示二进制0b111111111111111111111111111111的大小，含义就是最大的31位整数。32位系统中，V8所能表示的最大整数大小。上面的 ” | 0 “操作表示取整。翻译过来就是1073741823 - （(Date.now() / 10) | 0 .
+
+先别在这纠结，回溯到requestCurrentTime函数中，紧接着就要执行findHighestPriorityRoot方法，来看看这个方法是干嘛的。
+
+
