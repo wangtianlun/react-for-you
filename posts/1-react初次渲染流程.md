@@ -664,4 +664,190 @@ function requestCurrentTime() {
 
 先别在这纠结，回溯到requestCurrentTime函数中，紧接着就要执行findHighestPriorityRoot方法，来看看这个方法是干嘛的。
 
+```javascript
+function findHighestPriorityRoot() {
+  let highestPriorityWork = NoWork; // NoWork为0
+  let highestPriorityRoot = null;
+  if (lastScheduledRoot !== null) { 
+    let previousScheduledRoot = lastScheduledRoot;
+    let root = firstScheduledRoot;
+    while (root !== null) {
+      const remainingExpirationTime = root.expirationTime;
+      if (remainingExpirationTime === NoWork) {
+        // This root no longer has work. Remove it from the scheduler.
+
+        // TODO: This check is redudant, but Flow is confused by the branch
+        // below where we set lastScheduledRoot to null, even though we break
+        // from the loop right after.
+        invariant(
+          previousScheduledRoot !== null && lastScheduledRoot !== null,
+          'Should have a previous and last root. This error is likely ' +
+            'caused by a bug in React. Please file an issue.',
+        );
+        if (root === root.nextScheduledRoot) {
+          // This is the only root in the list.
+          root.nextScheduledRoot = null;
+          firstScheduledRoot = lastScheduledRoot = null;
+          break;
+        } else if (root === firstScheduledRoot) {
+          // This is the first root in the list.
+          const next = root.nextScheduledRoot;
+          firstScheduledRoot = next;
+          lastScheduledRoot.nextScheduledRoot = next;
+          root.nextScheduledRoot = null;
+        } else if (root === lastScheduledRoot) {
+          // This is the last root in the list.
+          lastScheduledRoot = previousScheduledRoot;
+          lastScheduledRoot.nextScheduledRoot = firstScheduledRoot;
+          root.nextScheduledRoot = null;
+          break;
+        } else {
+          previousScheduledRoot.nextScheduledRoot = root.nextScheduledRoot;
+          root.nextScheduledRoot = null;
+        }
+        root = previousScheduledRoot.nextScheduledRoot;
+      } else {
+        if (remainingExpirationTime > highestPriorityWork) {
+          // Update the priority, if it's higher
+          highestPriorityWork = remainingExpirationTime;
+          highestPriorityRoot = root;
+        }
+        if (root === lastScheduledRoot) {
+          break;
+        }
+        if (highestPriorityWork === Sync) {
+          // Sync is highest priority by definition so
+          // we can stop searching.
+          break;
+        }
+        previousScheduledRoot = root;
+        root = root.nextScheduledRoot;
+      }
+    }
+  }
+
+  nextFlushedRoot = highestPriorityRoot;
+  nextFlushedExpirationTime = highestPriorityWork;
+}
+```
+
+首次渲染的lastScheduledRoot变量为null， 所以if代码块里并不会执行，所以会直接执行最后两句。最后两句的执行结果是nextFlushedRoot = null， nextFlushedExpirationTime = 0。继续回溯到requestCurrentTime方法中，会执行到这句if判断(nextFlushedExpirationTime === NoWork || nextFlushedExpirationTime === Never)，在findHighestPriorityRoot函数中我们得到nextFlushedExpirationTime = 0，所以会进入到if代码块里，开始执行recomputeCurrentRendererTime()方法。
+
+```javascript
+  function recomputeCurrentRendererTime() {
+    const currentTimeMs = now() - originalStartTimeMs;
+    currentRendererTime = msToExpirationTime(currentTimeMs);
+  }
+```
+
+回溯到updateContainer方法，计算出一个当前渲染时间之后，开始执行computeExpirationForFiber方法
+
+```javascript
+function computeExpirationForFiber(currentTime: ExpirationTime, fiber: Fiber) {
+  const priorityLevel = unstable_getCurrentPriorityLevel();
+  let expirationTime;
+  if (expirationContext !== NoWork) {
+    // An explicit expiration context was set;
+    expirationTime = expirationContext;
+  } else if (isWorking) {
+    if (isCommitting) {
+      // Updates that occur during the commit phase should have sync priority
+      // by default.
+      expirationTime = Sync;
+    } else {
+      // Updates during the render phase should expire at the same time as
+      // the work that is being rendered.
+      expirationTime = nextRenderExpirationTime;
+    }
+  } else {
+    // No explicit expiration context was set, and we're not currently
+    // performing work. Calculate a new expiration time.
+    if (fiber.mode & ConcurrentMode) {
+      if (isBatchingInteractiveUpdates) {
+        // This is an interactive update
+        expirationTime = computeInteractiveExpiration(currentTime);
+      } else {
+        // This is an async update
+        expirationTime = computeAsyncExpiration(currentTime);
+      }
+      // If we're in the middle of rendering a tree, do not update at the same
+      // expiration time that is already rendering.
+      if (nextRoot !== null && expirationTime === nextRenderExpirationTime) {
+        expirationTime -= 1;
+      }
+    } else {
+      // This is a sync update
+      expirationTime = Sync;
+    }
+  }
+  if (isBatchingInteractiveUpdates) {
+    // This is an interactive update. Keep track of the lowest pending
+    // interactive expiration time. This allows us to synchronously flush
+    // all interactive updates when needed.
+    if (
+      lowestPriorityPendingInteractiveExpirationTime === NoWork ||
+      expirationTime < lowestPriorityPendingInteractiveExpirationTime
+    ) {
+      lowestPriorityPendingInteractiveExpirationTime = expirationTime;
+    }
+  }
+  return expirationTime;
+}
+```
+
+unstable_getCurrentPriorityLevel函数的运行结果为3. 最终计算出了expirationTime的值。
+然后回溯到updateContainer方法中，进入最后一句函数调用，也就是updateContainerAtExpirationTime，来看看这个函数的定义
+
+```javascript
+  function updateContainerAtExpirationTime(
+    element: ReactNodeList,
+    container: OpaqueRoot,
+    parentComponent: ?React$Component<any, any>,
+    expirationTime: ExpirationTime,
+    callback: ?Function,
+  ) {
+    // TODO: If this is a nested container, this won't be the root.
+    const current = container.current;
+
+    const context = getContextForSubtree(parentComponent);
+    if (container.context === null) {
+      container.context = context;
+    } else {
+      container.pendingContext = context;
+    }
+
+    return scheduleRootUpdate(current, element, expirationTime, callback);
+  }
+```
+
+接收5个参数，App组件对象，FiberRoot，null，expirationTime，callback绑定函数。
+首先从FiberRoot对象里取出current就是之前得到的uninitializedFiber，对，就是那个FiberNode对象。
+然后是通过调用getContextForSubtree方法来获取context上下文，进入到getContextForSubtree方法中。
+
+```javascript
+  function getContextForSubtree(
+    parentComponent: ?React$Component<any, any>,
+  ): Object {
+    if (!parentComponent) {
+      return emptyContextObject;
+    }
+
+    const fiber = getInstance(parentComponent);
+    const parentContext = findCurrentUnmaskedContext(fiber);
+
+    if (fiber.tag === ClassComponent) {
+      const Component = fiber.type;
+      if (isLegacyContextProvider(Component)) {
+        return processChildContext(fiber, Component, parentContext);
+      }
+    }
+
+    return parentContext;
+  }
+```
+
+在这里我们传给函数的parentComponent为null。所以这个函数直接返回了一个emptyContextObject对象。
+这个对象就是一个空对象 emptyContextObject = {};
+然后回溯到updateContainerAtExpirationTime方法中，进行if/else判断。我们的FiberRoot对象上的context属性此时确实是null，所以会进入到if代码块里。把空对象赋予FiberRoot对象上的context属性上。继续执行。
+updateContainerAtExpirationTime函数的最后一句会返回一个值，该值又是scheduleRootUpdate方法的返回值，我们进入到函数定义。
 
