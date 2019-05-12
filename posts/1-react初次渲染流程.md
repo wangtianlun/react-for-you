@@ -851,3 +851,72 @@ unstable_getCurrentPriorityLevel函数的运行结果为3. 最终计算出了exp
 然后回溯到updateContainerAtExpirationTime方法中，进行if/else判断。我们的FiberRoot对象上的context属性此时确实是null，所以会进入到if代码块里。把空对象赋予FiberRoot对象上的context属性上。继续执行。
 updateContainerAtExpirationTime函数的最后一句会返回一个值，该值又是scheduleRootUpdate方法的返回值，我们进入到函数定义。
 
+```javascript
+function scheduleRootUpdate(
+  current: Fiber,
+  element: ReactNodeList,
+  expirationTime: ExpirationTime,
+  callback: ?Function,
+) {
+  const update = createUpdate(expirationTime);
+  // Caution: React DevTools currently depends on this property
+  // being called "element".
+  update.payload = {element};
+
+  callback = callback === undefined ? null : callback;
+  if (callback !== null) {
+    warningWithoutStack(
+      typeof callback === 'function',
+      'render(...): Expected the last optional `callback` argument to be a ' +
+        'function. Instead received: %s.',
+      callback,
+    );
+    update.callback = callback;
+  }
+
+  flushPassiveEffects();
+  enqueueUpdate(current, update);
+  scheduleWork(current, expirationTime);
+
+  return expirationTime;
+}
+```
+该函数接收4个参数，分别是上述的FiberNode对象，App组件对象，expirationTime过期时间，callback绑定函数。首先根据过期时间，去调用createUpdate方法。返回一个update对象，我们进入到createUpdate函数中。
+
+```javascript
+  function createUpdate(expirationTime: ExpirationTime): Update<*> {
+    return {
+      expirationTime: expirationTime,
+
+      tag: UpdateState,
+      payload: null,
+      callback: null,
+
+      next: null,
+      nextEffect: null,
+    };
+  }
+```
+
+首先看这个UpdateState这个常量，它的值被定义为0. React还定义了其他几种更新类型，分别是：
+
+```javascript
+  var UpdateState = 0;
+  var ReplaceState = 1;
+  var ForceUpdate = 2;
+  var CaptureUpdate = 3;
+```
+
+创建了Update对象之后，进行返回。回溯到上一层。执行了以下赋值操作。
+
+```javascript
+  update.payload = {element};
+```
+
+根据注释上的说明可知，React开发工具会用到这个element属性。
+接下来是对callback的一个判断。
+
+```javascript
+  callback = callback === undefined ? null : callback;
+```
+我们在第一次执行时calllback是有值的，所以这一句执行过后callback没有变化。紧接着会将callback赋予给 update对象的callback属性上。
