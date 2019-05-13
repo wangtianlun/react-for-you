@@ -1000,4 +1000,20 @@ function createUpdateQueue<State>(baseState: State): UpdateQueue<State> {
 }
 ```
 
-本次传入的baseState是fiber.memoizedState，而本例中的fiber.memoizedState在首次渲染时为null。所以得到的queue对象所有属性对应的属性值权威null。回溯到enqueueUpdate方法。此时queue1和fiber.updateQueue都被赋值为刚才得到的queue对象。所以会进入到else代码块里。
+本次传入的baseState是fiber.memoizedState，而本例中的fiber.memoizedState在首次渲染时为null。所以得到的queue对象所有属性对应的属性值权威null。回溯到enqueueUpdate方法。此时queue1和fiber.updateQueue都被赋值为刚才得到的queue对象。queue2依然为null，所以进入到下面一个if代码块里去执行appendUpdateToQueue方法，将我们传递进来的update对象追加到更新队列里，来看看appendUpdateToQueue的定义。
+
+```javascript
+  function appendUpdateToQueue<State>(
+    queue: UpdateQueue<State>,
+    update: Update<State>,
+  ) {
+    // Append the update to the end of the list.
+    if (queue.lastUpdate === null) {
+      // Queue is empty
+      queue.firstUpdate = queue.lastUpdate = update;
+    } else {
+      queue.lastUpdate.next = update;
+      queue.lastUpdate = update;
+    }
+  }
+```
