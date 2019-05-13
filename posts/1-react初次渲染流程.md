@@ -920,3 +920,84 @@ function scheduleRootUpdate(
   callback = callback === undefined ? null : callback;
 ```
 我们在第一次执行时calllback是有值的，所以这一句执行过后callback没有变化。紧接着会将callback赋予给 update对象的callback属性上。
+flushPassiveEffects暂且不说，直接看enqueueUpdate方法，
+
+```javascript
+function enqueueUpdate<State>(fiber: Fiber, update: Update<State>) {
+  // 惰性创建更新队列
+  const alternate = fiber.alternate;
+  let queue1;
+  let queue2;
+  if (alternate === null) {
+    // There's only one fiber.
+    queue1 = fiber.updateQueue;
+    queue2 = null;
+    if (queue1 === null) {
+      queue1 = fiber.updateQueue = createUpdateQueue(fiber.memoizedState);
+    }
+  } else {
+    // There are two owners.
+    queue1 = fiber.updateQueue;
+    queue2 = alternate.updateQueue;
+    if (queue1 === null) {
+      if (queue2 === null) {
+        // Neither fiber has an update queue. Create new ones.
+        queue1 = fiber.updateQueue = createUpdateQueue(fiber.memoizedState);
+        queue2 = alternate.updateQueue = createUpdateQueue(
+          alternate.memoizedState,
+        );
+      } else {
+        // Only one fiber has an update queue. Clone to create a new one.
+        queue1 = fiber.updateQueue = cloneUpdateQueue(queue2);
+      }
+    } else {
+      if (queue2 === null) {
+        // Only one fiber has an update queue. Clone to create a new one.
+        queue2 = alternate.updateQueue = cloneUpdateQueue(queue1);
+      } else {
+        // Both owners have an update queue.
+      }
+    }
+  }
+  if (queue2 === null || queue1 === queue2) {
+    // There's only a single queue.
+    appendUpdateToQueue(queue1, update);
+  } else {
+    // There are two queues. We need to append the update to both queues,
+    // while accounting for the persistent structure of the list — we don't
+    // want the same update to be added multiple times.
+    if (queue1.lastUpdate === null || queue2.lastUpdate === null) {
+      // One of the queues is not empty. We must add the update to both queues.
+      appendUpdateToQueue(queue1, update);
+      appendUpdateToQueue(queue2, update);
+    } else {
+      // Both queues are non-empty. The last update is the same in both lists,
+      // because of structural sharing. So, only append to one of the lists.
+      appendUpdateToQueue(queue1, update);
+      // But we still need to update the `lastUpdate` pointer of queue2.
+      queue2.lastUpdate = update;
+    }
+  }
+}
+```
+
+首先会取出fiberNode对象上面的alternate属性，然后定义了两个队列变量。首次执行，alternate为null，所以进入到if里，进入到if之后，queue1和queue2都被赋值为null，因为fiberNode上的updateQueue也是null。所以会去调用createUpdateQueue创建一个更新队列。进入到createUpdateQueue一探究竟。
+
+```javascript
+function createUpdateQueue<State>(baseState: State): UpdateQueue<State> {
+  const queue: UpdateQueue<State> = {
+    baseState,
+    firstUpdate: null,
+    lastUpdate: null,
+    firstCapturedUpdate: null,
+    lastCapturedUpdate: null,
+    firstEffect: null,
+    lastEffect: null,
+    firstCapturedEffect: null,
+    lastCapturedEffect: null,
+  };
+  return queue;
+}
+```
+
+本次传入的baseState是fiber.memoizedState，而本例中的fiber.memoizedState在首次渲染时为null。所以得到的queue对象所有属性对应的属性值权威null。回溯到enqueueUpdate方法。此时queue1和fiber.updateQueue都被赋值为刚才得到的queue对象。所以会进入到else代码块里。
