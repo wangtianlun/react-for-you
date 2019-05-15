@@ -1000,7 +1000,7 @@ function createUpdateQueue<State>(baseState: State): UpdateQueue<State> {
 }
 ```
 
-本次传入的baseState是fiber.memoizedState，而本例中的fiber.memoizedState在首次渲染时为null。所以得到的queue对象所有属性对应的属性值权威null。回溯到enqueueUpdate方法。此时queue1和fiber.updateQueue都被赋值为刚才得到的queue对象。queue2依然为null，所以进入到下面一个if代码块里去执行appendUpdateToQueue方法，将我们传递进来的update对象追加到更新队列里，来看看appendUpdateToQueue的定义。
+本次传入的baseState是fiber.memoizedState，而本例中的fiber.memoizedState在首次渲染时为null。所以得到的queue对象所有属性对应的属性值权威null。回溯到enqueueUpdate方法。此时queue1和fiber.updateQueue都被赋值为刚才得到的queue对象。queue2依然为null，所以进入到下面一个if代码块里去执行appendUpdateToQueue方法，将我们传递进来的update对象追加到更新队列queue1里，来看看appendUpdateToQueue的定义。
 
 ```javascript
   function appendUpdateToQueue<State>(
@@ -1016,4 +1016,49 @@ function createUpdateQueue<State>(baseState: State): UpdateQueue<State> {
       queue.lastUpdate = update;
     }
   }
+```
+
+首先queue1中的lastUpdate为null，于是进入到if代码块里，将update赋予queue1的firstUpdate和lastUpdate属性上。函数执行结束。往上回溯，回溯到scheduleRootUpdate函数的最后一个函数调用scheduleWork函数。
+
+```javascript
+function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
+  const root = scheduleWorkToRoot(fiber, expirationTime);
+  if (root === null) {
+    return;
+  }
+
+  if (
+    !isWorking &&
+    nextRenderExpirationTime !== NoWork &&
+    expirationTime > nextRenderExpirationTime
+  ) {
+    // This is an interruption. (Used for performance tracking.)
+    interruptedBy = fiber;
+    resetStack();
+  }
+  markPendingPriorityLevel(root, expirationTime);
+  if (
+    // If we're in the render phase, we don't need to schedule this root
+    // for an update, because we'll do it before we exit...
+    !isWorking ||
+    isCommitting ||
+    // ...unless this is a different root than the one we're rendering.
+    nextRoot !== root
+  ) {
+    const rootExpirationTime = root.expirationTime;
+    requestWork(root, rootExpirationTime);
+  }
+  if (nestedUpdateCount > NESTED_UPDATE_LIMIT) {
+    // Reset this back to zero so subsequent updates don't throw.
+    nestedUpdateCount = 0;
+    invariant(
+      false,
+      'Maximum update depth exceeded. This can happen when a ' +
+        'component repeatedly calls setState inside ' +
+        'componentWillUpdate or componentDidUpdate. React limits ' +
+        'the number of nested updates to prevent infinite loops.',
+    );
+  }
+}
+
 ```
