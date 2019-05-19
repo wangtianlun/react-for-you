@@ -1,6 +1,6 @@
 
-<p align="center"><a href="https://github.com/wangtianlun/react-for-you" target="_blank" rel="noopener noreferrer"><img width="100" src="https://img.souche.com/f2e/1773c12ea70af0bd91bfc644db42b8cc.png
-" alt="React For You"></a></p>
+<p align="center"><img width="100" src="https://img.souche.com/f2e/1773c12ea70af0bd91bfc644db42b8cc.png
+" alt="React For You"></p>
 
 
 ## 前言
