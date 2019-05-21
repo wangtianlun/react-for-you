@@ -740,6 +740,10 @@ function findHighestPriorityRoot() {
   }
 ```
 
+originalStartTimeMs最开始被定义为 **let originalStartTimeMs: number = now();** 也就是说这个值在react bundle加载完毕后会打一个时间戳，这就是originalStartTimeMs，而在recomputeCurrentRendererTime函数的调用过程中，这个时候的now()与我们的originalStartTimeMs肯定是不同的，这样就算出了currentTimeMs这个时间差，然后经过msToExpirationTime的转化，就得到了currentRendererTime。currentRendererTime最开始也有定义，
+let currentRendererTime:ExpirationTime = msToExpirationTime(originalStartTimeMs); 它是把第一次bundle加载时间传递进去了。同时将值赋予给currentSchedulerTime变量。所以说最开始currentSchedulerTime与currentRendererTime是相等的。
+
+
 回溯到updateContainer方法，计算出一个当前渲染时间之后，开始执行computeExpirationForFiber方法
 
 ```javascript
