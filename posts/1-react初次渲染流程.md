@@ -628,7 +628,7 @@ isBatchingUpdates和isUnbatchingUpdates是两个boolean值，初次渲染时两�
   }
 ```
 
-来看函数体，第一句定义了一个常量current，还记得FiberRoot对象的current属性指向的是之前求得的FiberNode对象吗，如果不记得，可以翻看下上面的过程。就是那个叫做**uninitializedFiber**的对象。
+来看函数体，第一句定义了一个常量current，还记得FiberRoot对象的current属性指向的是之前求得的FiberNode（RootFiber）对象吗，如果不记得，可以翻看下上面的过程。就是那个叫做**uninitializedFiber**的对象。
 第二行会去调用requestCurrentTime方法获取一个时间，我们来看看这个函数的定义。它定义在react-reconciler/src/ReactFiberScheduler.js
 
 ```javascript
@@ -662,7 +662,7 @@ function requestCurrentTime() {
 
 这里的ms我们传入的就是now()，可以理解为Date.now()的值。这里的MAX_SIGNED_31_BIT_INT定义为1073741823，这个值表示二进制0b111111111111111111111111111111的大小，含义就是最大的31位整数。32位系统中，V8所能表示的最大整数大小。上面的 ” | 0 “操作表示取整。翻译过来就是1073741823 - （(Date.now() / 10) | 0 .
 
-先别在这纠结，回溯到requestCurrentTime函数中，紧接着就要执行findHighestPriorityRoot方法，来看看这个方法是干嘛的。
+先别在这纠结，回溯到requestCurrentTime函数中，紧接着就要执行findHighestPriorityRoot方法，从方法名来看是要去寻找最高优先级的根，来看看这个方法是干嘛的。
 
 ```javascript
 function findHighestPriorityRoot() {
@@ -731,6 +731,17 @@ function findHighestPriorityRoot() {
 }
 ```
 
+首次看这个函数会发现这里面多了几个变量，这几个变量也是定义在ReactFiberScheduler.js文件中，算是文件内的全局变量。首先来看几个和findHighestPriorityRoot方法有关的。
+
+```javascript
+  let firstScheduledRoot: FiberRoot | null = null;
+  let lastScheduledRoot: FiberRoot | null = null;
+  let nextFlushedRoot: FiberRoot | null = null;
+  let nextFlushedExpirationTime: ExpirationTime = NoWork;
+```
+
+这些变量在不同方法中可能会被重新赋值。
+
 首次渲染的lastScheduledRoot变量为null， 所以if代码块里并不会执行，所以会直接执行最后两句。最后两句的执行结果是nextFlushedRoot = null， nextFlushedExpirationTime = 0。继续回溯到requestCurrentTime方法中，会执行到这句if判断(nextFlushedExpirationTime === NoWork || nextFlushedExpirationTime === Never)，在findHighestPriorityRoot函数中我们得到nextFlushedExpirationTime = 0，所以会进入到if代码块里，开始执行recomputeCurrentRendererTime()方法。
 
 ```javascript
@@ -742,7 +753,6 @@ function findHighestPriorityRoot() {
 
 originalStartTimeMs最开始被定义为 **let originalStartTimeMs: number = now();** 也就是说这个值在react bundle加载完毕后会打一个时间戳，这就是originalStartTimeMs，而在recomputeCurrentRendererTime函数的调用过程中，这个时候的now()与我们的originalStartTimeMs肯定是不同的，这样就算出了currentTimeMs这个时间差，然后经过msToExpirationTime的转化，就得到了currentRendererTime。currentRendererTime最开始也有定义，
 let currentRendererTime:ExpirationTime = msToExpirationTime(originalStartTimeMs); 它是把第一次bundle加载时间传递进去了。同时将值赋予给currentSchedulerTime变量。所以说最开始currentSchedulerTime与currentRendererTime是相等的。
-
 
 回溯到updateContainer方法，计算出一个当前渲染时间之后，开始执行computeExpirationForFiber方法
 
