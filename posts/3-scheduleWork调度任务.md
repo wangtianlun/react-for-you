@@ -44,7 +44,7 @@ function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
 ```
 
 ```javascript
-  function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
+function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
   recordScheduleUpdate();
 
   if (__DEV__) {
@@ -130,3 +130,40 @@ function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
   return root;
 }
 ```
+
+这个方法的目的是根据传入的Fiber节点，向上去寻找它所对应的FiberRoot并返回。在向上寻找的过程中，由于Fiber对象有return属性，指向它的父级Fiber对象，而每一级Fiber对象上都有childExpirationTime属性，在while循环中会根据该方法传入的expirationTime同每一级Fiber对象的childExpirationTime属性进行比较，因为对于expirationTime来说，值越小就意味着优先级越高，所以如果childExpirationTime大于expirationTime，那么该Fiber对象上的childExpirationTime将被重置为expirationTime。
+
+再来看看requestWork函数的定义
+
+```javascript
+// requestWork is called by the scheduler whenever a root receives an update.
+// It's up to the renderer to call renderRoot at some point in the future.
+function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
+  addRootToSchedule(root, expirationTime);
+  if (isRendering) {
+    // Prevent reentrancy. Remaining work will be scheduled at the end of
+    // the currently rendering batch.
+    return;
+  }
+
+  if (isBatchingUpdates) {
+    // Flush work at the end of the batch.
+    if (isUnbatchingUpdates) {
+      // ...unless we're inside unbatchedUpdates, in which case we should
+      // flush it now.
+      nextFlushedRoot = root;
+      nextFlushedExpirationTime = Sync;
+      performWorkOnRoot(root, Sync, false);
+    }
+    return;
+  }
+
+  // TODO: Get rid of Sync and use current time?
+  if (expirationTime === Sync) {
+    performSyncWork();
+  } else {
+    scheduleCallbackWithExpirationTime(root, expirationTime);
+  }
+}
+```
+
