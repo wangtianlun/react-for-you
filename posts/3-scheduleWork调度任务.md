@@ -167,3 +167,52 @@ function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
 }
 ```
 
+```javascript
+function scheduleCallbackWithExpirationTime(
+  root: FiberRoot,
+  expirationTime: ExpirationTime,
+) {
+  if (callbackExpirationTime !== NoWork) {
+    // A callback is already scheduled. Check its expiration time (timeout).
+    if (expirationTime < callbackExpirationTime) {
+      // Existing callback has sufficient timeout. Exit.
+      return;
+    } else {
+      if (callbackID !== null) {
+        // Existing callback has insufficient timeout. Cancel and schedule a
+        // new one.
+        cancelDeferredCallback(callbackID);
+      }
+    }
+    // The request callback timer is already running. Don't start a new one.
+  } else {
+    startRequestCallbackTimer();
+  }
+
+  callbackExpirationTime = expirationTime;
+  const currentMs = now() - originalStartTimeMs;
+  const expirationTimeMs = expirationTimeToMs(expirationTime);
+  const timeout = expirationTimeMs - currentMs;
+  callbackID = scheduleDeferredCallback(performAsyncWork, {timeout});
+}
+```
+
+```javascript
+  function ensureHostCallbackIsScheduled() {
+    if (isExecutingCallback) {
+      // Don't schedule work yet; wait until the next time we yield.
+      return;
+    }
+    // Schedule the host callback using the earliest expiration in the list.
+    var expirationTime = firstCallbackNode.expirationTime;
+    if (!isHostCallbackScheduled) {
+      isHostCallbackScheduled = true;
+    } else {
+      // Cancel the existing host callback.
+      cancelHostCallback();
+    }
+    requestHostCallback(flushWork, expirationTime);
+  }
+```
+
+ensureHostCallbackIsScheduled这个方法的作用是，确保firstCallbackNode指向的是callbackNode队列中，优先级最高的callbackNode

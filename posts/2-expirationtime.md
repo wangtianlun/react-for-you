@@ -80,3 +80,5 @@ function computeInteractiveExpiration(currentTime: ExpirationTime) {
 }
 
 ```
+
+这里有一点说明，关于expirationTime和优先级之间的关系，在最开始的阶段，关系是expirationTime值越小优先级越大，但是现在是值越大优先级越大。
