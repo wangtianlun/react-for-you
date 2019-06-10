@@ -168,6 +168,35 @@ function requestWork(root: FiberRoot, expirationTime: ExpirationTime) {
 ```
 
 ```javascript
+function addRootToSchedule(root: FiberRoot, expirationTime: ExpirationTime) {
+  // Add the root to the schedule.
+  // Check if this root is already part of the schedule.
+  if (root.nextScheduledRoot === null) {
+    // This root is not already scheduled. Add it.
+    root.expirationTime = expirationTime;
+    if (lastScheduledRoot === null) {
+      firstScheduledRoot = lastScheduledRoot = root;
+      root.nextScheduledRoot = root;
+    } else {
+      lastScheduledRoot.nextScheduledRoot = root;
+      lastScheduledRoot = root;
+      lastScheduledRoot.nextScheduledRoot = firstScheduledRoot;
+    }
+  } else {
+    // This root is already scheduled, but its priority may have increased.
+    const remainingExpirationTime = root.expirationTime;
+    if (expirationTime > remainingExpirationTime) {
+      // Update the priority.
+      root.expirationTime = expirationTime;
+    }
+  }
+}
+```
+
+addRootToSchedule方法接收FiberRoot对象以及它对应的过期实践，这个方法主要是用于将传入的FiberRoot节点添加到调度队列里。方法第一句就首先判断传入的FiberRoot对象是否已经在调度队列里，如果FiberRoot对象上nextScheduledRoot属性为null，说明FiberRoot对象还没有被添加到调度队列里，然后通过lastScheduledRoot这个全局对象来判断队列里到底是只有一个root还是有多个root，如果lastScheduledRoot为null，说明队列里只应有一个root，那就是传进来的FiberRoot对象，于是将FiberRoot对象赋予firstScheduledRoot和lastScheduledRoot，调度队列也是一个头尾相连的环形链表的结构，如果不为null，说明调度队列里有其他root节点，那就将传进来的FiberRoot对象放到队列的末尾。并把FiberRoot对象赋予给lastScheduledRoot这个全局变量。然后会到else部分，如果传进来的FiberRoot对象已经在调度队列里了，那会比较下过期时间，过期时间代表了优先级，如果传进来的过期时间大于remainingExpirationTime，那说明传进来的FiberRoot对象所对应的优先级提升了，把传进来的expirationTime值赋予FiberRoot对象的expirationTime属性。
+
+
+```javascript
 function scheduleCallbackWithExpirationTime(
   root: FiberRoot,
   expirationTime: ExpirationTime,
