@@ -82,3 +82,30 @@ function computeInteractiveExpiration(currentTime: ExpirationTime) {
 ```
 
 这里有一点说明，关于expirationTime和优先级之间的关系，在最开始的阶段，关系是expirationTime值越小优先级越大，但是现在是值越大优先级越大。
+
+这里我们主要看computeExpirationBucket这个函数，我们通过最后两个计算不同优先级的方法来对computeExpirationBucket函数进行测试。首先测试computeInteractiveExpiration这个函数，假设我们传入的当前时间currentTime为10000。那么到了computeExpirationBucket函数中就会是这样
+
+```javascript
+  return (
+    1073741822 -
+    ceiling(
+      1073741822 - 10000 + 150 / 10,
+      100 / 10,
+    )
+  );
+```
+
+我们再来看看ceiling函数，根据函数名，应该跟Math.ceil向上取整方法有相似之处，那为什么没有直接用Math.ceil呢，肯定是里面有一套自定义向上取整的规范。这个函数接收两个参数，第一个就是将被转化的数字，第二个是表示精度的参数precision。我们来写一段代码
+
+```javascript
+  const num = 1073741822 - 10000 + 150 / 10;
+  const precision = 100 / 10;
+
+  // 进入到ceiling函数就变成这样
+
+  ((((1073741822 - 10000 + 150 / 10) / (100 / 10)) | 0) + 1) * (100 / 10)
+
+```
+
+将上面的计算表达式放到浏览器控制台上执行，并不断修改上式中的10000这个数字，比如从9998 - 10018，依次试一下得出来的值会发现，从9998 - 10007之间得到的值都是1073731840，而从10008 - 10017之间得到的值都是1073731830。也就是说两次相差为precision值之内的currentTime会得到相同的ExpirationTime。所以precision这个值就成为关键，而precision是和批次数量有关系的，这个文件中定义了两种批次数量，一个是代表高优先级批次数量的HIGH_PRIORITY_BATCH_SIZE（100），另一个是代表低优先级批次数量的LOW_PRIORITY_BATCH_SIZE（250）
+
