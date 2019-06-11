@@ -47,13 +47,6 @@ function scheduleWork(fiber: Fiber, expirationTime: ExpirationTime) {
 function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
   recordScheduleUpdate();
 
-  if (__DEV__) {
-    if (fiber.tag === ClassComponent) {
-      const instance = fiber.stateNode;
-      warnAboutInvalidUpdates(instance);
-    }
-  }
-
   // Update the source fiber's expiration time
   if (fiber.expirationTime < expirationTime) {
     fiber.expirationTime = expirationTime;
@@ -132,6 +125,28 @@ function scheduleWorkToRoot(fiber: Fiber, expirationTime): FiberRoot | null {
 ```
 
 这个方法的目的是根据传入的Fiber节点，向上去寻找它所对应的FiberRoot并返回。在向上寻找的过程中，由于Fiber对象有return属性，指向它的父级Fiber对象，而每一级Fiber对象上都有childExpirationTime属性，在while循环中会根据该方法传入的expirationTime同每一级Fiber对象的childExpirationTime属性进行比较，因为对于expirationTime来说，值越小就意味着优先级越高，所以如果childExpirationTime大于expirationTime，那么该Fiber对象上的childExpirationTime将被重置为expirationTime。
+
+scheduleWork方法中还有一个resetStack方法，它的方法定义为
+
+```javascript
+  function resetStack() {
+    if (nextUnitOfWork !== null) {
+      let interruptedWork = nextUnitOfWork.return;
+      while (interruptedWork !== null) {
+        unwindInterruptedWork(interruptedWork);
+        interruptedWork = interruptedWork.return;
+      }
+    }
+
+    nextRoot = null;
+    nextRenderExpirationTime = NoWork;
+    nextLatestAbsoluteTimeoutMs = -1;
+    nextRenderDidError = false;
+    nextUnitOfWork = null;
+  }
+```
+nextUnitOfWork是一个全局变量，它代表下一个要工作的Fiber节点。这个后续在介绍renderRoot的过程中会详细说明，resetStack首先判断nextUnitOfWork是否为null，如果不为null，就定义了一个interruptedWork变量，然后通过while循环依次向上寻找它的祖先Fiber节点，并在到达RootFiber节点时跳出循环，那这时，interruptedWork就指向RootFiber节点。每次while循环都会去调用unwindInterruptedWork方法，并且会把当前得到的interruptedWork传递进去，unwindInterruptedWork方法里面会判断interruptedWork的tag属性，因为interruptedWork就是Fiber对象，Fiber对象上都会有tag标志。根据不同的tag会对context对象做些处理，这里只简单提一下，会单独抽出来一章对context进行说明。resetStack之后，是对几个全局变量的赋值操作。
+
 
 再来看看requestWork函数的定义
 
