@@ -606,7 +606,7 @@ isBatchingUpdates和isUnbatchingUpdates是两个boolean值，初次渲染时两�
   }
 ```
 
-实例化之后，就会执行到updateContainer这个函数里，分别传入App组件对象，FiberRoot，null，以及ReactWork实例的bind方法。来看下具体定义。
+_onCommit是ReactWork构造函数的原型方法，实例化之后，就会执行到updateContainer这个函数里，分别传入App组件对象，FiberRoot，null，以及ReactWork实例的bind方法。来看下具体定义。
 
 ```javascript
   function updateContainer(
